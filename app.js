@@ -5,6 +5,9 @@
  *  Row Level Security in der Datenbank setzt das durch - diese Seite ist nur
  *  die Oberflaeche, sie kann keine Rechte umgehen.
  *
+ *  Anmeldung: E-Mail und Passwort, wie in den uebrigen Stieber-Apps. Alle Apps
+ *  teilen dieselbe Benutzerverwaltung, wer hier angemeldet ist, ist es dort auch.
+ *
  *  Aenderungen werden sofort gespeichert (beim Tippen kurz verzoegert).
  */
 
@@ -100,34 +103,60 @@ function torMeldung(text, art) {
   el.hidden = false;
 }
 
+/* Verstaendliche Texte statt der englischen Rueckmeldungen von Supabase */
+function anmeldeFehlerText(err) {
+  const m = (err && err.message ? err.message : String(err)).toLowerCase();
+  if (m.includes('invalid login credentials')) return 'E-Mail-Adresse oder Passwort stimmt nicht.';
+  if (m.includes('email not confirmed')) return 'Diese Adresse ist noch nicht bestätigt.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Zu viele Versuche. Bitte einen Moment warten.';
+  return err && err.message ? err.message : String(err);
+}
+
+/* Anmeldung mit E-Mail und Passwort */
 document.getElementById('anmeldung').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const feld = document.getElementById('mail');
+  const mail = document.getElementById('mail').value.trim().toLowerCase();
+  const pw = document.getElementById('pw').value;
   const knopf = document.getElementById('knopf-anmelden');
-  const mail = feld.value.trim().toLowerCase();
-  if (!mail) return;
+  if (!mail || !pw) return;
+
   knopf.disabled = true;
-  knopf.textContent = 'Wird gesendet …';
+  knopf.textContent = 'Wird geprüft …';
+  document.getElementById('tor-meldung').hidden = true;
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email: mail, password: pw });
+    if (error) throw error;
+    document.getElementById('pw').value = '';
+    gestartet = false;
+    await starten(data.session);
+  } catch (err) {
+    torMeldung('<b>Anmeldung nicht möglich.</b><br>' + esc(anmeldeFehlerText(err)), 'warn');
+    knopf.disabled = false;
+    knopf.textContent = 'Anmelden';
+  }
+});
+
+/* Notweg: Anmeldelink per E-Mail, falls das Passwort fehlt */
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-akt="linkstatt"]')) return;
+  const mail = document.getElementById('mail').value.trim().toLowerCase();
+  if (!mail) { torMeldung('Bitte zuerst Ihre E-Mail-Adresse eintragen.', 'warn'); return; }
   try {
     const { error } = await sb.auth.signInWithOtp({
       email: mail,
       options: { emailRedirectTo: location.origin + location.pathname }
     });
     if (error) throw error;
-    torMeldung('<b>Bitte sehen Sie in Ihr Postfach.</b><br>Wir haben einen Anmeldelink an ' + esc(mail)
-      + ' geschickt. Der Link gilt eine Stunde. Falls nichts ankommt, prüfen Sie bitte den Spam-Ordner.', 'ok');
-    document.getElementById('anmeldung').hidden = true;
+    torMeldung('<b>Anmeldelink verschickt.</b><br>Wir haben einen Link an ' + esc(mail)
+      + ' geschickt. Er gilt eine Stunde. Bitte in <b>diesem</b> Browser öffnen.', 'ok');
   } catch (err) {
-    torMeldung('<b>Der Anmeldelink konnte nicht versendet werden.</b><br>' + esc(err.message || String(err))
-      + '<br><br>Bitte Oliver Stieber informieren.', 'warn');
-    knopf.disabled = false;
-    knopf.textContent = 'Anmeldelink anfordern';
+    torMeldung('<b>Der Anmeldelink konnte nicht versendet werden.</b><br>'
+      + esc(anmeldeFehlerText(err)), 'warn');
   }
 });
 
 document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-akt="datenschutz-tor"]');
-  if (!el) return;
+  if (!e.target.closest('[data-akt="datenschutz-tor"]')) return;
   torMeldung(datenschutzKurz(), 'ok');
 });
 
@@ -797,9 +826,10 @@ async function starten(session) {
   if (error) { torMeldung('<b>Die Datenbank ist nicht erreichbar.</b><br>' + esc(error.message), 'warn'); return; }
 
   if (!recht) {
+    document.getElementById('anmeldung').hidden = false;
     torMeldung('<b>Sie sind angemeldet, aber noch nicht freigeschaltet.</b><br>'
       + esc(S.benutzer) + ' ist für die Prozesslandkarte noch nicht freigegeben. '
-      + 'Bitte wenden Sie sich an Oliver Stieber.<br><br>'
+      + 'Melden Sie sich mit einer freigeschalteten Adresse an oder wenden Sie sich an Oliver Stieber.<br><br>'
       + '<button class="knopf schlank" data-akt="abmelden">Abmelden</button>', 'warn');
     return;
   }
@@ -816,9 +846,9 @@ async function starten(session) {
   zeichne();
 }
 
-/*  Anmeldung aus der Adresszeile einloesen.
+/*  Anmeldung aus der Adresszeile einloesen (Notweg ueber Anmeldelink).
  *
- *  Nach dem Klick auf den Anmeldelink haengen die Zugangsdaten hinter dem
+ *  Nach dem Klick auf einen Anmeldelink haengen die Zugangsdaten hinter dem
  *  Rautezeichen in der Adresse. Wir uebergeben sie an den Client und raeumen
  *  die Adresse anschliessend auf, damit sie nicht im Verlauf stehen bleibt.
  */
@@ -832,7 +862,7 @@ async function anmeldungAusAdresse() {
     if (abgelehnt) {
       sauber();
       torMeldung('<b>Die Anmeldung wurde abgelehnt.</b><br>' + esc(abgelehnt)
-        + '<br><br>Meist ist der Link abgelaufen. Bitte einen neuen anfordern.', 'warn');
+        + '<br><br>Meist ist der Link abgelaufen. Bitte mit Passwort anmelden.', 'warn');
       return;
     }
 
@@ -853,14 +883,9 @@ async function anmeldungAusAdresse() {
   } catch (e) {
     torMeldung('<b>Die Anmeldung konnte nicht abgeschlossen werden.</b><br>'
       + esc(e && e.message ? e.message : String(e))
-      + '<br><br>Bitte einen neuen Anmeldelink anfordern.', 'warn');
+      + '<br><br>Bitte mit E-Mail und Passwort anmelden.', 'warn');
   }
 }
-
-/* Spaetere Anmeldung im selben Fenster */
-sb.auth.onAuthStateChange((ereignis, sitzung) => {
-  if (ereignis === 'SIGNED_IN' && !gestartet) starten(sitzung);
-});
 
 (async function () {
   await anmeldungAusAdresse();
