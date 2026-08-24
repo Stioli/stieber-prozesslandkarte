@@ -20,8 +20,22 @@ const SUPABASE_KEY = 'sb_publishable_CDpY6_W07WdHFKYv0cx59g_GDm7UlZF';
  *  hat nicht zuverlaessig gegriffen. Wir werten die Adresszeile selbst aus,
  *  siehe anmeldungAusAdresse() weiter unten. */
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, detectSessionInUrl: false, flowType: 'implicit' }
+  auth: {
+    persistSession: true, detectSessionInUrl: false, flowType: 'implicit',
+    /*  Ohne eigene Sperre: der eingebaute Web-Lock-Mechanismus kann haengen
+     *  bleiben, wenn mehrere Stieber-Apps dieselbe Sitzung teilen. Diese Seite
+     *  fuehrt immer nur einen Anmeldevorgang gleichzeitig aus. */
+    lock: async (_name, _frist, arbeit) => await arbeit()
+  }
 });
+
+/*  Jeder Netzaufruf bekommt eine Frist. Ohne sie bleibt die Seite bei einer
+ *  haengenden Verbindung stumm stehen, statt eine Meldung zu zeigen. */
+function mitFrist(versprechen, ms, text) {
+  let uhr;
+  const wecker = new Promise((_, ab) => { uhr = setTimeout(() => ab(new Error(text)), ms); });
+  return Promise.race([versprechen, wecker]).finally(() => clearTimeout(uhr));
+}
 
 /* ============================ Grundlagen ============================ */
 
@@ -109,6 +123,9 @@ function anmeldeFehlerText(err) {
   if (m.includes('invalid login credentials')) return 'E-Mail-Adresse oder Passwort stimmt nicht.';
   if (m.includes('email not confirmed')) return 'Diese Adresse ist noch nicht bestätigt.';
   if (m.includes('rate limit') || m.includes('too many')) return 'Zu viele Versuche. Bitte einen Moment warten.';
+  if (m.includes('zu lange')) return err.message;
+  if (m.includes('failed to fetch') || m.includes('networkerror'))
+    return 'Keine Verbindung zur Datenbank. Bitte Internetverbindung prüfen.';
   return err && err.message ? err.message : String(err);
 }
 
@@ -124,13 +141,35 @@ document.getElementById('anmeldung').addEventListener('submit', async (e) => {
   knopf.textContent = 'Wird geprüft …';
   document.getElementById('tor-meldung').hidden = true;
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email: mail, password: pw });
+    /*  Liegt noch die Sitzung einer anderen Adresse im Browser — alle Stieber-Apps
+     *  teilen sich eine —, wird sie zuerst örtlich verworfen. Sonst mischen sich
+     *  alte und neue Anmeldung. */
+    const vorher = await mitFrist(sb.auth.getSession(), 8000,
+      'Die Anmeldung hat zu lange gedauert.');
+    const alteAdresse = vorher && vorher.data && vorher.data.session
+      ? (vorher.data.session.user.email || '').toLowerCase() : null;
+    if (alteAdresse && alteAdresse !== mail) {
+      console.log('[PL] alte Sitzung wird verworfen:', alteAdresse);
+      await mitFrist(sb.auth.signOut({ scope: 'local' }), 8000,
+        'Die Anmeldung hat zu lange gedauert.').catch(() => {});
+    }
+
+    console.log('[PL] Anmeldung läuft für', mail);
+    const { data, error } = await mitFrist(
+      sb.auth.signInWithPassword({ email: mail, password: pw }), 20000,
+      'Die Anmeldung hat zu lange gedauert. Bitte noch einmal versuchen.');
     if (error) throw error;
+    console.log('[PL] Anmeldung erfolgreich, Sitzung steht');
+
     document.getElementById('pw').value = '';
     gestartet = false;
     await starten(data.session);
   } catch (err) {
+    console.error('[PL] Anmeldung fehlgeschlagen:', err);
     torMeldung('<b>Anmeldung nicht möglich.</b><br>' + esc(anmeldeFehlerText(err)), 'warn');
+  } finally {
+    /*  Immer zurücksetzen — sonst bliebe der Knopf bei einem unerwarteten
+     *  Fehler für immer auf „Wird geprüft". */
     knopf.disabled = false;
     knopf.textContent = 'Anmelden';
   }
@@ -820,10 +859,21 @@ async function starten(session) {
 
   S.benutzer = (session.user.email || '').toLowerCase();
 
-  const { data: recht, error } = await sb.from('pl_berechtigt')
-    .select('rolle,name').eq('email', S.benutzer).maybeSingle();
-
-  if (error) { torMeldung('<b>Die Datenbank ist nicht erreichbar.</b><br>' + esc(error.message), 'warn'); return; }
+  let recht = null;
+  try {
+    const antwort = await mitFrist(
+      sb.from('pl_berechtigt').select('rolle,name').eq('email', S.benutzer).maybeSingle(),
+      15000, 'Die Datenbank hat zu lange nicht geantwortet.');
+    if (antwort.error) throw antwort.error;
+    recht = antwort.data;
+  } catch (e) {
+    console.error('[PL] Berechtigung konnte nicht gelesen werden:', e);
+    document.getElementById('anmeldung').hidden = false;
+    torMeldung('<b>Die Datenbank ist nicht erreichbar.</b><br>'
+      + esc(e && e.message ? e.message : String(e)), 'warn');
+    gestartet = false;
+    return;
+  }
 
   if (!recht) {
     document.getElementById('anmeldung').hidden = false;
