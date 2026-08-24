@@ -59,6 +59,13 @@ input,select,textarea{font:inherit;color:inherit}
 }
 .anmeldung button:hover{background:var(--blau-dunkel)}
 .anmeldung button:disabled{opacity:.55;cursor:not-allowed}
+/* Der Notweg ist ein Link, kein zweiter Knopf - sonst konkurriert er mit "Anmelden" */
+.anmeldung .alslink{
+  margin:0;padding:0;background:none;font-weight:400;border-radius:0;
+  color:var(--sek);font-size:13px;text-decoration:underline;
+}
+.anmeldung .alslink:hover{background:none;color:var(--blau)}
+.anmeldung label+label,.anmeldung input+label{margin-top:8px}
 .hinweis{margin:2px 0 0;font-size:13px;color:var(--grau3);line-height:1.5}
 .tor-meldung{margin-top:20px;padding:14px 16px;border-radius:12px;font-size:14px;text-align:left;line-height:1.55}
 .tor-meldung.ok{background:var(--gruen-bg);border:1px solid var(--gruen-rand);color:var(--ink)}

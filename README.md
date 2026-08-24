@@ -6,25 +6,21 @@ Interne Anwendung zur Erfassung aller Unternehmensprozesse mit KI-Ampel.
 
 ## Was hier liegt
 
-Nur die Einstiegsseite (`index.html`). Sie holt die eigentliche Anwendung aus
-Supabase und zeigt sie an — dasselbe Muster wie beim
-Qualitätsmanagement-Dashboard. Grund: Supabase liefert HTML grundsätzlich als
-`text/plain` aus, GitHub Pages liefert es korrekt als `text/html`.
-
-**Prozessdaten liegen nicht in diesem Repository**, sondern in Supabase hinter
-einer Anmeldung.
+Nur die Oberfläche — `index.html`, `stil.css`, `app.js`.
+**Prozessdaten liegen nicht in diesem Repository**, sondern in Supabase hinter einer Anmeldung.
 
 ## Aufbau
 
 | | |
 |---|---|
-| Einstiegsseite | GitHub Pages, diese Datei |
-| Quelltext der Anwendung | Supabase, Tabelle `pl_seite` (Zeilen `index`, `css`, `js`) |
-| Auslieferung | Supabase Edge Function `prozesse` |
-| Datenbank | Supabase-Projekt `fahrzeug-ankauf-automation`, Region eu-central-1 (Frankfurt) |
-| Tabellen | `pl_berechtigt`, `pl_prozess`, `pl_phase`, `pl_schritt`, `pl_aenderung`, `pl_seite` |
-| Anmeldung | Supabase Auth, Anmeldelink per E-Mail (kein Passwort) |
+| Oberfläche | GitHub Pages, statisches HTML ohne Build-Schritt |
+| Datenbank | Supabase, Projekt `fahrzeug-ankauf-automation`, Region eu-central-1 (Frankfurt) |
+| Tabellen | `pl_berechtigt`, `pl_prozess`, `pl_phase`, `pl_schritt`, `pl_aenderung` |
+| Anmeldung | Supabase Auth, E-Mail und Passwort — dieselben Zugangsdaten wie in den übrigen Stieber-Apps |
 | Zugriffsschutz | Row Level Security; nur Adressen in `pl_berechtigt` erhalten Daten |
+
+Alle Stieber-Apps liegen unter `stioli.github.io` und teilen deshalb dieselbe Sitzung im Browser.
+Wer sich hier abmeldet, ist auch in den übrigen Apps abgemeldet.
 
 ## Rollen
 
@@ -43,17 +39,15 @@ Sie zeigt den **heutigen** Zustand, nicht das Potenzial.
 - **grün** — KI erledigt, Mensch nur bei Ausnahmen
 - **grau** — bleibt bewusst beim Menschen
 
-Sobald ein Prozess in Schritte zerlegt ist, ergibt sich seine Ampel aus den
-Schritten. Graue Prozesse zählen nicht in den Automatisierungsgrad.
-
-## Neue Fassung veröffentlichen
-
-Nicht hier, sondern in der Datenbank: die betreffende Zeile in `pl_seite`
-ersetzen. Diese Seite und der Link bleiben unverändert.
+Sobald ein Prozess in Schritte zerlegt ist, ergibt sich seine Ampel aus den Schritten.
+Graue Prozesse zählen nicht in den Automatisierungsgrad.
 
 ## Datenschutz
 
-Die Anwendung enthält **keine Kundendaten**. Personenbezug entsteht nur durch
-die Zugriffsliste und das Änderungsprotokoll; dessen Personenbezug wird nach
-zwölf Monaten automatisch entfernt (Datenbankjob `pl_protokoll_anonymisieren`,
-läuft monatlich).
+Die Anwendung enthält **keine Kundendaten**. Personenbezug entsteht nur durch die
+Zugriffsliste und das Änderungsprotokoll; dessen Personenbezug wird nach zwölf Monaten
+automatisch entfernt (Datenbankjob `pl_protokoll_anonymisieren`, läuft monatlich).
+
+Vor dem produktiven Einsatz sind abzuschließen: Auftragsverarbeitungsverträge mit
+Supabase und GitHub, Aufnahme in das Verzeichnis von Verarbeitungstätigkeiten,
+Freigabe des Datenschutzhinweises durch den Datenschutzbeauftragten.
