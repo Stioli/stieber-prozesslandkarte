@@ -22,11 +22,14 @@
     <div id="tor-laden" class="balken"><i></i></div>
 
     <form id="anmeldung" class="anmeldung" hidden>
-      <label for="mail">Ihre Firmen-E-Mail-Adresse</label>
-      <input id="mail" type="email" autocomplete="email" required
+      <label for="mail">Firmen-E-Mail-Adresse</label>
+      <input id="mail" type="email" autocomplete="username" required
              placeholder="vorname.nachname@autohaus-stieber.de" spellcheck="false">
-      <button type="submit" id="knopf-anmelden">Anmeldelink anfordern</button>
-      <p class="hinweis">Sie erhalten eine E-Mail mit einem Link. Ein Klick darauf meldet Sie an — ein Passwort brauchen Sie nicht.</p>
+      <label for="pw">Passwort</label>
+      <input id="pw" type="password" autocomplete="current-password" required>
+      <button type="submit" id="knopf-anmelden">Anmelden</button>
+      <p class="hinweis">Dieselben Zugangsdaten wie bei Ihren übrigen Stieber-Apps.</p>
+      <p class="hinweis"><button type="button" class="alslink" data-akt="linkstatt">Passwort vergessen? Anmeldelink per E-Mail anfordern</button></p>
     </form>
 
     <div id="tor-meldung" class="tor-meldung" hidden></div>
